@@ -1,47 +1,136 @@
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
 import Navbar from "../components/navbar";
+import Sidebar from "../components/sidebar"; // Import Sidebar component
 
 const EmployerDashboard = () => {
-  const [loggedIn, setLoggedIn] = useState(false);
-  const [role, setRole] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [error, setError] = useState<string>("");
   const router = useRouter();
+  const employerEmail =
+    typeof window !== "undefined" ? localStorage.getItem("email") : null;
 
   useEffect(() => {
-    // Check if the user is logged in and has the employer role
     if (typeof window !== "undefined") {
-      const userLoggedIn = localStorage.getItem("userLoggedIn");
-      const userRole = localStorage.getItem("role");
-
-      if (userLoggedIn === "true" && userRole === "employer") {
-        setLoggedIn(true);
-        setRole(userRole);
-      } else {
-        // Redirect to login if the user is not an employer
-        router.push("/login");
-      }
-
-      setIsLoading(false);
+      const storedJobs = JSON.parse(localStorage.getItem("jobs") || "[]");
+      setJobs(storedJobs);
     }
-  }, [router]);
+  }, []);
 
-  if (isLoading) {
-    return <div>Loading...</div>; // Show loading while checking status
-  }
+  const handleDeleteJob = (jobIndex: number) => {
+    if (typeof window !== "undefined") {
+      const updatedJobs = [...jobs];
+      updatedJobs.splice(jobIndex, 1);
+      localStorage.setItem("jobs", JSON.stringify(updatedJobs));
+      setJobs(updatedJobs);
+    }
+  };
+
+  const handleEditJob = (jobIndex: number) => {
+    const jobToEdit = jobs[jobIndex];
+    router.push({
+      pathname: "/employer-edit-job",
+      query: { jobId: jobToEdit.id },
+    });
+  };
+
+  const handleCloseJob = (jobIndex: number) => {
+    if (typeof window !== "undefined") {
+      const updatedJobs = [...jobs];
+      updatedJobs[jobIndex].isClosed = true;
+      localStorage.setItem("jobs", JSON.stringify(updatedJobs));
+      setJobs(updatedJobs);
+    }
+  };
+
+  const handleAddJob = () => {
+    router.push("/employer-add-job");
+  };
 
   return (
     <>
       <Navbar />
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-lg">
-          <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
-            Employer Dashboard
-          </h2>
-          <p className="text-center text-gray-600">
-            Welcome to your employer dashboard! Here you can manage your job
-            listings and more.
-          </p>
+      <div className="d-flex">
+        {/* Sidebar */}
+        <Sidebar />
+
+        {/* Main Content */}
+        <div className="container my-5 flex-grow-1">
+          <h2 className="text-center mb-4">Employer Dashboard</h2>
+          {error && <p className="text-danger text-center">{error}</p>}
+          <div className="row">
+            {jobs.length === 0 ? (
+              <p className="text-center">You have no job listings.</p>
+            ) : (
+              jobs.map((job, index) => {
+                if (job.email !== employerEmail) return null;
+
+                const { location } = job;
+                const region = location?.region || "N/A";
+                const province = location?.province || "N/A";
+                const city = location?.city || "N/A";
+                const barangay = location?.barangay || "N/A";
+                const fullAddress = `${barangay}, ${city}, ${province}, ${region}`;
+                const workType =
+                  job.workType === "remote"
+                    ? "Remote"
+                    : job.workType === "hybrid"
+                    ? "Hybrid"
+                    : "On-Site";
+
+                return (
+                  <div className="col-md-4 mb-4" key={index}>
+                    <div className="card">
+                      <div className="card-body">
+                        <h5 className="card-title">{job.jobTitle}</h5>
+                        <p className="card-text">{job.jobDescription}</p>
+
+                        <p>
+                          <strong>Email:</strong> {job.email}
+                        </p>
+                        <p>
+                          <strong>Salary:</strong> ${job.salary}
+                        </p>
+                        <p>
+                          <strong>Job Type:</strong> {workType}
+                        </p>
+                        <p>
+                          <strong>Location:</strong> {fullAddress}
+                        </p>
+
+                        <div className="d-flex justify-content-between">
+                          <button
+                            className="btn btn-warning"
+                            onClick={() => handleEditJob(index)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="btn btn-danger"
+                            onClick={() => handleDeleteJob(index)}
+                          >
+                            Delete
+                          </button>
+                          {job.isClosed ? (
+                            <button className="btn btn-secondary" disabled>
+                              Closed
+                            </button>
+                          ) : (
+                            <button
+                              className="btn btn-primary"
+                              onClick={() => handleCloseJob(index)}
+                            >
+                              Close Job
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       </div>
     </>

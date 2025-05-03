@@ -35,8 +35,10 @@ export default function LoginPage() {
     );
 
     if (user) {
+      // Store logged-in email, role, and login status in localStorage
       localStorage.setItem("userLoggedIn", "true");
       localStorage.setItem("role", user.role);
+      localStorage.setItem("loggedInEmail", user.email); // Store email
 
       if (user.role === "graduate") {
         router.push("/dashboard");
