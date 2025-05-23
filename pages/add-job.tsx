@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/router";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Navbar from "../components/navbar";
 import Sidebar from "../components/sidebar";
 
-const EmployerAddJob = () => {
+const AddJob = () => {
+  const router = useRouter();
+
+  // Form state
+  const [jobs, setJobs] = useState<any[]>([]);
   const [companyName, setCompanyName] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [jobDescription, setJobDescription] = useState("");
@@ -15,7 +19,9 @@ const EmployerAddJob = () => {
   const [daysPerWeek, setDaysPerWeek] = useState(5);
   const [timePerDay, setTimePerDay] = useState(8);
   const [email, setEmail] = useState("");
-  const [error, setError] = useState("");
+  const [workType, setWorkType] = useState("on-site");
+
+  // Location states
   const [regions, setRegions] = useState<any[]>([]);
   const [provinces, setProvinces] = useState<any[]>([]);
   const [cities, setCities] = useState<any[]>([]);
@@ -27,41 +33,82 @@ const EmployerAddJob = () => {
   const [selectedBarangay, setSelectedBarangay] = useState("");
   const [streetAddress, setStreetAddress] = useState("");
   const [postalCode, setPostalCode] = useState("");
-  const [workType, setWorkType] = useState("on-site");
 
-  const [employerRole, setEmployerRole] = useState("Unknown");
+  const [error, setError] = useState("");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
 
-  const router = useRouter();
-
+  // Check window width to toggle sidebar and responsiveness
   useEffect(() => {
-    setEmployerRole(
-      localStorage.getItem("role") === "employer" ? "Employer" : "Unknown"
-    );
+    if (typeof window !== "undefined") {
+      const storedJobs = JSON.parse(localStorage.getItem("jobs") || "[]");
+      setJobs(storedJobs);
+    }
+
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      // Sidebar open only on desktop by default
+      setIsSidebarOpen(!mobile);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Fetch regions
+  const toggleSidebar = () => setIsSidebarOpen((prev) => !prev);
+
+  const handleLogout = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("auth");
+      localStorage.removeItem("email");
+      router.push("/");
+    }
+  };
+
+  // Fetch regions on mount
   useEffect(() => {
     fetch("https://psgc.gitlab.io/api/regions/")
       .then((res) => res.json())
       .then((data) => setRegions(data));
   }, []);
 
-  // Fetch provinces based on selected region
+  // Load provinces or cities when region changes
   useEffect(() => {
     if (selectedRegion) {
-      setProvinces([]); // Clear provinces if region changes
-      setSelectedProvince(""); // Reset province selection
+      setProvinces([]);
+      setSelectedProvince("");
+      setCities([]);
+      setSelectedCity("");
+      setBarangays([]);
+      setSelectedBarangay("");
+
       fetch(`https://psgc.gitlab.io/api/regions/${selectedRegion}/provinces/`)
         .then((res) => res.json())
-        .then((data) => setProvinces(data));
+        .then((data) => {
+          if (data.length === 0) {
+            fetch(
+              `https://psgc.gitlab.io/api/regions/${selectedRegion}/cities-municipalities/`
+            )
+              .then((res) => res.json())
+              .then((citiesData) => {
+                setCities(citiesData);
+              });
+          } else {
+            setProvinces(data);
+          }
+        });
     }
   }, [selectedRegion]);
 
-  // Fetch cities based on selected province
+  // Load cities when province changes
   useEffect(() => {
     if (selectedProvince) {
-      setCities([]); // Clear cities if province changes
-      setSelectedCity(""); // Reset city selection
+      setCities([]);
+      setSelectedCity("");
+      setBarangays([]);
+      setSelectedBarangay("");
+
       fetch(
         `https://psgc.gitlab.io/api/provinces/${selectedProvince}/cities-municipalities/`
       )
@@ -70,10 +117,12 @@ const EmployerAddJob = () => {
     }
   }, [selectedProvince]);
 
-  // Fetch barangays based on selected city
+  // Load barangays when city changes
   useEffect(() => {
     if (selectedCity) {
-      setBarangays([]); // Clear barangays if city changes
+      setBarangays([]);
+      setSelectedBarangay("");
+
       fetch(
         `https://psgc.gitlab.io/api/cities-municipalities/${selectedCity}/barangays/`
       )
@@ -82,7 +131,12 @@ const EmployerAddJob = () => {
     }
   }, [selectedCity]);
 
-  const handleAddJob = (e: React.FormEvent) => {
+  const handleSalaryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/[^0-9.]/g, "");
+    setSalary(value);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (
@@ -93,68 +147,77 @@ const EmployerAddJob = () => {
       !salary ||
       !email ||
       !selectedRegion ||
-      !selectedProvince ||
+      (provinces.length > 0 && !selectedProvince) ||
       !selectedCity ||
       !selectedBarangay ||
       !streetAddress ||
       !postalCode
     ) {
-      setError("All fields are required.");
+      setError("Please fill all required fields.");
       return;
     }
-
     const loggedInEmail = localStorage.getItem("loggedInEmail"); // Get the logged-in user's email
     if (!loggedInEmail) {
       setError("You must be logged in to post a job.");
       return;
     }
 
-    const existingJobs = JSON.parse(localStorage.getItem("jobs") || "[]");
-
     const newJob = {
+      id:
+        crypto.randomUUID?.() ??
+        Date.now().toString() + Math.random().toString(36).substring(2, 7),
       companyName,
       jobTitle,
       jobDescription,
       requirements,
       salary,
       isFullTime,
-      email,
       daysPerWeek,
       timePerDay,
+      email,
       location: {
         region: selectedRegion,
-        province: selectedProvince,
+        province: provinces.length > 0 ? selectedProvince : null,
         city: selectedCity,
         barangay: selectedBarangay,
         streetAddress,
         postalCode,
       },
       workType,
-      employer: employerRole,
-      createdBy: loggedInEmail, // Add createdBy with logged-in email
+      createdBy: loggedInEmail,
+      isOpen: true,
     };
 
-    const updatedJobs = [...existingJobs, newJob];
-    localStorage.setItem("jobs", JSON.stringify(updatedJobs));
+    const jobs = JSON.parse(localStorage.getItem("jobs") || "[]");
+    jobs.push(newJob);
+    localStorage.setItem("jobs", JSON.stringify(jobs));
 
-    router.push("/employer-dashboard");
-  };
-
-  const handleSalaryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/[^0-9.]/g, "");
-    setSalary(value);
+    router.push("/employer-dashboard"); // Redirect after add
   };
 
   return (
     <>
-      <Navbar />
+      <Navbar toggleSidebar={toggleSidebar} />
+      <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
       <div className="d-flex">
-        <Sidebar />
-        <div className="flex-grow-1 p-4 bg-light">
+        <main
+          className="flex-grow-1"
+          style={{
+            marginLeft: isMobile || !isSidebarOpen ? 0 : 250, // Sidebar width (matching Sidebar component)
+            padding: isMobile ? "20px 15px" : "40px 60px",
+            minHeight: "100vh",
+            backgroundColor: "#f8f9fa",
+            transition: "margin-left 0.3s ease",
+          }}
+        >
           <form
-            onSubmit={handleAddJob}
+            onSubmit={handleSubmit}
             className="bg-white p-4 rounded shadow mx-auto"
-            style={{ maxWidth: "800px" }}
+            style={{
+              width: "100%",
+              maxWidth: 800,
+              boxSizing: "border-box",
+            }}
           >
             <h1 className="text-center text-primary mb-4">Add Job Listing</h1>
             {error && <p className="text-danger text-center mb-4">{error}</p>}
@@ -187,129 +250,92 @@ const EmployerAddJob = () => {
               <label className="form-label">Job Description</label>
               <textarea
                 className="form-control"
-                rows={4}
                 value={jobDescription}
                 onChange={(e) => setJobDescription(e.target.value)}
-                placeholder="E.g., Develop and maintain software applications"
+                rows={3}
                 required
               />
             </div>
 
             <div className="mb-3">
-              <label className="form-label">Job Requirements</label>
+              <label className="form-label">Requirements</label>
               <textarea
                 className="form-control"
-                rows={4}
                 value={requirements}
                 onChange={(e) => setRequirements(e.target.value)}
-                placeholder="E.g., 3+ years of experience in software development"
+                rows={3}
                 required
               />
             </div>
 
             <div className="mb-3">
-              <label className="form-label">Salary</label>
+              <label className="form-label">Salary (₱)</label>
               <input
                 type="text"
                 className="form-control"
                 value={salary}
                 onChange={handleSalaryChange}
-                placeholder="₱"
+                placeholder="E.g., 15000"
                 required
               />
             </div>
 
             <div className="mb-3">
-              <label className="form-label">Job Type</label>
+              <label className="form-label">Full-time?</label>
               <select
-                className="form-control"
-                value={isFullTime ? "full-time" : "part-time"}
-                onChange={(e) => setIsFullTime(e.target.value === "full-time")}
+                className="form-select"
+                value={isFullTime ? "yes" : "no"}
+                onChange={(e) => setIsFullTime(e.target.value === "yes")}
+                required
               >
-                <option value="full-time">Full-time</option>
-                <option value="part-time">Part-time</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
               </select>
             </div>
 
             <div className="mb-3">
-              <label className="form-label">Work Type</label>
-              <select
+              <label className="form-label">Days per Week</label>
+              <input
+                type="number"
                 className="form-control"
-                value={workType}
-                onChange={(e) => setWorkType(e.target.value)}
-              >
-                <option value="on-site">On-Site</option>
-                <option value="remote">Remote</option>
-                <option value="hybrid">Hybrid</option>
-              </select>
+                min={1}
+                max={7}
+                value={daysPerWeek}
+                onChange={(e) => setDaysPerWeek(parseInt(e.target.value))}
+                required
+              />
             </div>
 
             <div className="mb-3">
-              <label className="form-label">Employer Email</label>
+              <label className="form-label">Hours per Day</label>
+              <input
+                type="number"
+                className="form-control"
+                min={1}
+                max={24}
+                value={timePerDay}
+                onChange={(e) => setTimePerDay(parseInt(e.target.value))}
+                required
+              />
+            </div>
+
+            <div className="mb-3">
+              <label className="form-label">Contact Email</label>
               <input
                 type="email"
                 className="form-control"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="E.g., example@company.com"
                 required
               />
             </div>
 
-            <div className="mb-3">
-              <label className="form-label">Work Days per Week</label>
-              <input
-                type="number"
-                className="form-control"
-                value={daysPerWeek}
-                onChange={(e) => setDaysPerWeek(Number(e.target.value))}
-                min={1}
-                max={7}
-                required
-              />
-            </div>
-
-            <div className="mb-3">
-              <label className="form-label">Time per Day (in hours)</label>
-              <input
-                type="number"
-                className="form-control"
-                value={timePerDay}
-                onChange={(e) => setTimePerDay(Number(e.target.value))}
-                min={1}
-                max={12}
-                required
-              />
-            </div>
-
-            <div className="mb-3">
-              <label className="form-label">Street Address</label>
-              <input
-                type="text"
-                className="form-control"
-                value={streetAddress}
-                onChange={(e) => setStreetAddress(e.target.value)}
-                placeholder="E.g., 123 Main St"
-                required
-              />
-            </div>
-
-            <div className="mb-3">
-              <label className="form-label">Postal Code</label>
-              <input
-                type="text"
-                className="form-control"
-                value={postalCode}
-                onChange={(e) => setPostalCode(e.target.value)}
-                placeholder="E.g., 1234"
-                required
-              />
-            </div>
+            <h5 className="mt-4">Location</h5>
 
             <div className="mb-3">
               <label className="form-label">Region</label>
               <select
-                className="form-control"
+                className="form-select"
                 value={selectedRegion}
                 onChange={(e) => setSelectedRegion(e.target.value)}
                 required
@@ -323,32 +349,34 @@ const EmployerAddJob = () => {
               </select>
             </div>
 
-            <div className="mb-3">
-              <label className="form-label">Province</label>
-              <select
-                className="form-control"
-                value={selectedProvince}
-                onChange={(e) => setSelectedProvince(e.target.value)}
-                required
-              >
-                <option value="">Select Province</option>
-                {provinces.map((province) => (
-                  <option key={province.code} value={province.code}>
-                    {province.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {provinces.length > 0 && (
+              <div className="mb-3">
+                <label className="form-label">Province</label>
+                <select
+                  className="form-select"
+                  value={selectedProvince}
+                  onChange={(e) => setSelectedProvince(e.target.value)}
+                  required
+                >
+                  <option value="">Select Province</option>
+                  {provinces.map((province) => (
+                    <option key={province.code} value={province.code}>
+                      {province.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="mb-3">
-              <label className="form-label">City</label>
+              <label className="form-label">City / Municipality</label>
               <select
-                className="form-control"
+                className="form-select"
                 value={selectedCity}
                 onChange={(e) => setSelectedCity(e.target.value)}
                 required
               >
-                <option value="">Select City</option>
+                <option value="">Select City / Municipality</option>
                 {cities.map((city) => (
                   <option key={city.code} value={city.code}>
                     {city.name}
@@ -360,7 +388,7 @@ const EmployerAddJob = () => {
             <div className="mb-3">
               <label className="form-label">Barangay</label>
               <select
-                className="form-control"
+                className="form-select"
                 value={selectedBarangay}
                 onChange={(e) => setSelectedBarangay(e.target.value)}
                 required
@@ -374,14 +402,51 @@ const EmployerAddJob = () => {
               </select>
             </div>
 
+            <div className="mb-3">
+              <label className="form-label">Street Address</label>
+              <input
+                type="text"
+                className="form-control"
+                value={streetAddress}
+                onChange={(e) => setStreetAddress(e.target.value)}
+                placeholder="Street, Building, etc."
+                required
+              />
+            </div>
+
+            <div className="mb-3">
+              <label className="form-label">Postal Code</label>
+              <input
+                type="text"
+                className="form-control"
+                value={postalCode}
+                onChange={(e) => setPostalCode(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="mb-3">
+              <label className="form-label">Work Type</label>
+              <select
+                className="form-select"
+                value={workType}
+                onChange={(e) => setWorkType(e.target.value)}
+                required
+              >
+                <option value="on-site">On-site</option>
+                <option value="remote">Remote</option>
+                <option value="hybrid">Hybrid</option>
+              </select>
+            </div>
+
             <button type="submit" className="btn btn-primary w-100">
               Add Job Listing
             </button>
           </form>
-        </div>
+        </main>
       </div>
     </>
   );
 };
 
-export default EmployerAddJob;
+export default AddJob;

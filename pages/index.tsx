@@ -1,17 +1,38 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Navbar from "../components/navbar";
 import Link from "next/link";
 
 export default function Home() {
   const router = useRouter();
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedJobs = JSON.parse(localStorage.getItem("jobs") || "[]");
+      setJobs(storedJobs);
+
+      const handleResize = () => {
+        const mobile = window.innerWidth < 768;
+        setIsMobile(mobile);
+        setIsSidebarOpen(!mobile); // Sidebar visible only on desktop
+      };
+
+      handleResize();
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  const toggleSidebar = () => setIsSidebarOpen((prev) => !prev);
 
   useEffect(() => {
     const isLoggedIn = localStorage.getItem("userLoggedIn");
     const role = localStorage.getItem("role");
 
     if (isLoggedIn === "true") {
-      // Redirect to respective dashboard if logged in
       if (role === "graduate") {
         router.push("/dashboard");
       } else if (role === "employer") {
@@ -22,31 +43,52 @@ export default function Home() {
 
   return (
     <>
-      <Navbar />
-      <section className="min-vh-100 d-flex justify-content-center align-items-center bg-gradient-to-tr from-sky-100 to-indigo-200 text-center p-4">
-        <div className="container">
-          <h1 className="display-4 text-primary font-weight-bold mb-4">
-            Welcome to GradLaunch
-          </h1>
-          <p className="text-muted lead mb-5">
+      <Navbar toggleSidebar={toggleSidebar} />
+      <section
+        className="position-relative min-vh-100 d-flex align-items-center text-center px-3"
+        style={{
+          backgroundImage: 'url("/images/index.jpg")',
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            zIndex: 1,
+          }}
+        />
+        <div
+          className="position-relative text-white"
+          style={{ zIndex: 2, maxWidth: "600px" }}
+        ></div>
+        {/* Content */}
+        <div
+          className="container position-relative text-white"
+          style={{ zIndex: 2 }}
+        >
+          <h1 className="display-4 fw-bold mb-3">Welcome to GradLaunch</h1>
+          <p className="lead mb-4">
             Helping fresh IT graduates find jobs, build portfolios, and launch
             careers 🚀
           </p>
-          <div className="d-flex justify-content-center gap-4">
-            <Link
-              href="/sign-up"
-              target="_blank"
-              className="btn btn-primary btn-lg py-3 px-5 rounded-lg"
-            >
-              Get Started
-            </Link>
-            <Link
-              href="/login"
-              target="_blank"
-              className="btn btn-outline-primary btn-lg py-3 px-5 rounded-lg"
-            >
-              Log In
-            </Link>
+          <div className="row justify-content-center">
+            <div className="col-12 col-md-auto mb-3 mb-md-0">
+              <Link href="/sign-up" className="btn btn-primary btn-lg w-100">
+                Get Started
+              </Link>
+            </div>
+            <div className="col-12 col-md-auto">
+              <Link
+                href="/login"
+                className="btn btn-outline-light btn-lg w-100"
+              >
+                Log In
+              </Link>
+            </div>
           </div>
         </div>
       </section>

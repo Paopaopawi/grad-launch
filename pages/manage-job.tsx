@@ -15,60 +15,97 @@ const ManageJob = () => {
   const [cities, setCities] = useState<any[]>([]);
   const [barangays, setBarangays] = useState<any[]>([]);
 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+
   const router = useRouter();
 
-  const [loggedInEmail, setLoggedInEmail] = useState<string | null>(null);
+  // Detect mobile viewport and adjust sidebar open/close
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedJobs = JSON.parse(localStorage.getItem("jobs") || "[]");
+      setJobs(storedJobs);
+    }
 
-  // Set loggedInEmail from localStorage after the component mounts (client-side only)
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+
+      // Sidebar is always open on desktop, toggleable on mobile
+      setIsSidebarOpen(!mobile);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const toggleSidebar = () => setIsSidebarOpen((prev) => !prev);
+
+  const handleLogout = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("auth");
+      localStorage.removeItem("email");
+      router.push("/");
+    }
+  };
+  // Load logged-in user email from localStorage
+  const [loggedInEmail, setLoggedInEmail] = useState<string | null>(null);
   useEffect(() => {
     const email = localStorage.getItem("loggedInEmail");
     setLoggedInEmail(email);
   }, []);
 
-  // Fetch regions
+  // Load regions on mount
   useEffect(() => {
     fetch("https://psgc.gitlab.io/api/regions/")
       .then((res) => res.json())
-      .then((data) => setRegions(data));
+      .then((data) => setRegions(data))
+      .catch(() => setRegions([]));
   }, []);
 
-  // Fetch provinces based on selected region
+  // Load provinces when region changes in editJob
   useEffect(() => {
     if (editJob?.location?.region) {
-      setProvinces([]); // Clear provinces if region changes
       fetch(
         `https://psgc.gitlab.io/api/regions/${editJob.location.region}/provinces/`
       )
         .then((res) => res.json())
-        .then((data) => setProvinces(data));
+        .then((data) => setProvinces(data))
+        .catch(() => setProvinces([]));
+    } else {
+      setProvinces([]);
     }
   }, [editJob?.location?.region]);
 
-  // Fetch cities based on selected province
+  // Load cities when province changes in editJob
   useEffect(() => {
     if (editJob?.location?.province) {
-      setCities([]); // Clear cities if province changes
       fetch(
         `https://psgc.gitlab.io/api/provinces/${editJob.location.province}/cities-municipalities/`
       )
         .then((res) => res.json())
-        .then((data) => setCities(data));
+        .then((data) => setCities(data))
+        .catch(() => setCities([]));
+    } else {
+      setCities([]);
     }
   }, [editJob?.location?.province]);
 
-  // Fetch barangays based on selected city
+  // Load barangays when city changes in editJob
   useEffect(() => {
     if (editJob?.location?.city) {
-      setBarangays([]); // Clear barangays if city changes
       fetch(
         `https://psgc.gitlab.io/api/cities-municipalities/${editJob.location.city}/barangays/`
       )
         .then((res) => res.json())
-        .then((data) => setBarangays(data));
+        .then((data) => setBarangays(data))
+        .catch(() => setBarangays([]));
+    } else {
+      setBarangays([]);
     }
   }, [editJob?.location?.city]);
 
-  // Fetch jobs when the component mounts
+  // Load user's jobs from localStorage
   useEffect(() => {
     if (loggedInEmail) {
       const savedJobs = JSON.parse(localStorage.getItem("jobs") || "[]");
@@ -79,39 +116,46 @@ const ManageJob = () => {
     }
   }, [loggedInEmail]);
 
+  // Delete job by id
   const handleDeleteJob = (jobId: string) => {
     const updatedJobs = jobs.filter((job) => job.id !== jobId);
     localStorage.setItem("jobs", JSON.stringify(updatedJobs));
     setJobs(updatedJobs);
+    if (isEditMode && editJob?.id === jobId) {
+      setIsEditMode(false);
+      setEditJob(null);
+    }
   };
 
+  // Edit job - set edit mode and deep clone job
   const handleEditJob = (job: any) => {
-    setEditJob(job);
+    const jobClone = JSON.parse(JSON.stringify(job));
+    setEditJob(jobClone);
     setIsEditMode(true);
+    setError("");
   };
 
+  // Save edited job
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Relaxed validation: Only check for critical fields
-    if (!editJob.companyName || !editJob.jobTitle || !editJob.salary) {
+    if (!editJob?.companyName || !editJob?.jobTitle || !editJob?.salary) {
       setError("Company Name, Job Title, and Salary are required.");
       return;
     }
 
-    // Update job list with the edited job
     const updatedJobs = jobs.map((job) =>
-      job.id === editJob.id ? { ...editJob, isOpen: editJob.isOpen } : job
+      job.id === editJob.id ? { ...editJob } : job
     );
 
-    // Save updated jobs in local storage
     localStorage.setItem("jobs", JSON.stringify(updatedJobs));
-
-    // Update the jobs in state and close edit mode
     setJobs(updatedJobs);
     setIsEditMode(false);
+    setEditJob(null);
+    setError("");
   };
 
+  // Close job listing by ID
   const handleCloseJob = (jobId: string) => {
     const updatedJobs = jobs.map((job) =>
       job.id === jobId ? { ...job, isOpen: false } : job
@@ -120,6 +164,7 @@ const ManageJob = () => {
     setJobs(updatedJobs);
   };
 
+  // Open job listing by ID
   const handleOpenJob = (jobId: string) => {
     const updatedJobs = jobs.map((job) =>
       job.id === jobId ? { ...job, isOpen: true } : job
@@ -130,19 +175,32 @@ const ManageJob = () => {
 
   return (
     <>
-      <Navbar />
-      <div className="d-flex">
-        <Sidebar />
-        <div className="flex-grow-1 p-4 bg-light">
-          <h1 className="text-center text-primary mb-4">Manage Job Listings</h1>
+      <Navbar toggleSidebar={toggleSidebar} />
+      <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
 
-          {error && <p className="text-danger text-center mb-4">{error}</p>}
+      <div className="d-flex" style={{ minHeight: "100vh" }}>
+        <main
+          className="flex-grow-1"
+          style={{
+            marginLeft: !isMobile && isSidebarOpen ? 250 : 0,
+            padding: "40px 30px",
+            backgroundColor: "#f8f9fa",
+            transition: "margin-left 0.3s ease",
+            minHeight: "100vh",
+          }}
+        >
+          <h1 className="text-primary mb-4">Manage Job Listings</h1>
+
+          {error && <p className="text-danger mb-4">{error}</p>}
 
           <div className="row">
+            {jobs.length === 0 && (
+              <p className="text-muted">No job listings found.</p>
+            )}
             {jobs.map((job) => (
               <div key={job.id} className="col-md-4 mb-4">
-                <div className="card shadow-sm">
-                  <div className="card-body">
+                <div className="card shadow-sm h-100 d-flex flex-column">
+                  <div className="card-body flex-grow-1">
                     <h5 className="card-title">{job.jobTitle}</h5>
                     <p className="card-text">{job.companyName}</p>
                     <p className="card-text">{job.jobDescription}</p>
@@ -152,16 +210,17 @@ const ManageJob = () => {
                     <p className="card-text">
                       <strong>Status:</strong> {job.isOpen ? "Open" : "Closed"}
                     </p>
-
+                  </div>
+                  <div className="card-footer d-flex flex-wrap gap-2">
                     <button
-                      className="btn btn-primary me-2"
+                      className="btn btn-primary flex-grow-1 flex-md-grow-0"
                       onClick={() => handleEditJob(job)}
                     >
                       Edit
                     </button>
 
                     <button
-                      className="btn btn-danger me-2"
+                      className="btn btn-danger flex-grow-1 flex-md-grow-0"
                       onClick={() => handleDeleteJob(job.id)}
                     >
                       Delete
@@ -169,14 +228,14 @@ const ManageJob = () => {
 
                     {job.isOpen ? (
                       <button
-                        className="btn btn-secondary"
+                        className="btn btn-secondary flex-grow-1 flex-md-grow-0"
                         onClick={() => handleCloseJob(job.id)}
                       >
                         Close Listing
                       </button>
                     ) : (
                       <button
-                        className="btn btn-success"
+                        className="btn btn-success flex-grow-1 flex-md-grow-0"
                         onClick={() => handleOpenJob(job.id)}
                       >
                         Open Listing
@@ -188,22 +247,33 @@ const ManageJob = () => {
             ))}
           </div>
 
+          {/* Edit Modal */}
           {isEditMode && editJob && (
             <div
               className="modal show d-block"
-              style={{ backgroundColor: "rgba(0, 0, 0, 0.5)" }}
+              style={{
+                backgroundColor: "rgba(0, 0, 0, 0.5)",
+                overflowY: "auto",
+              }}
             >
-              <div className="modal-dialog">
+              <div className="modal-dialog modal-lg modal-dialog-centered">
                 <div className="modal-content">
                   <div className="modal-header">
                     <h5 className="modal-title">Edit Job Listing</h5>
                     <button
                       type="button"
                       className="btn-close"
-                      onClick={() => setIsEditMode(false)}
+                      onClick={() => {
+                        setIsEditMode(false);
+                        setEditJob(null);
+                        setError("");
+                      }}
                     ></button>
                   </div>
-                  <div className="modal-body">
+                  <div
+                    className="modal-body"
+                    style={{ maxHeight: "70vh", overflowY: "auto" }}
+                  >
                     <form onSubmit={handleSaveEdit}>
                       <div className="mb-3">
                         <label className="form-label">Company Name</label>
@@ -217,6 +287,7 @@ const ManageJob = () => {
                               companyName: e.target.value,
                             })
                           }
+                          required
                         />
                       </div>
 
@@ -229,6 +300,7 @@ const ManageJob = () => {
                           onChange={(e) =>
                             setEditJob({ ...editJob, jobTitle: e.target.value })
                           }
+                          required
                         />
                       </div>
 
@@ -272,6 +344,7 @@ const ManageJob = () => {
                           onChange={(e) =>
                             setEditJob({ ...editJob, salary: e.target.value })
                           }
+                          required
                         />
                       </div>
 
@@ -374,7 +447,7 @@ const ManageJob = () => {
                         <input
                           type="text"
                           className="form-control"
-                          value={editJob.location.postalCode}
+                          value={editJob.location.postalCode || ""}
                           onChange={(e) =>
                             setEditJob({
                               ...editJob,
@@ -391,13 +464,18 @@ const ManageJob = () => {
                         <label className="form-label">Region</label>
                         <select
                           className="form-control"
-                          value={editJob.location?.region || ""}
+                          value={editJob.location.region}
                           onChange={(e) =>
                             setEditJob({
                               ...editJob,
                               location: {
-                                ...editJob.location,
                                 region: e.target.value,
+                                province: "",
+                                city: "",
+                                barangay: "",
+                                streetAddress:
+                                  editJob.location.streetAddress || "",
+                                postalCode: editJob.location.postalCode || "",
                               },
                             })
                           }
@@ -415,16 +493,19 @@ const ManageJob = () => {
                         <label className="form-label">Province</label>
                         <select
                           className="form-control"
-                          value={editJob.location?.province || ""}
+                          value={editJob.location.province}
                           onChange={(e) =>
                             setEditJob({
                               ...editJob,
                               location: {
                                 ...editJob.location,
                                 province: e.target.value,
+                                city: "",
+                                barangay: "",
                               },
                             })
                           }
+                          disabled={!editJob.location.region}
                         >
                           <option value="">Select Province</option>
                           {provinces.map((province) => (
@@ -436,19 +517,23 @@ const ManageJob = () => {
                       </div>
 
                       <div className="mb-3">
-                        <label className="form-label">City/Municipality</label>
+                        <label className="form-label">
+                          City / Municipality
+                        </label>
                         <select
                           className="form-control"
-                          value={editJob.location?.city || ""}
+                          value={editJob.location.city}
                           onChange={(e) =>
                             setEditJob({
                               ...editJob,
                               location: {
                                 ...editJob.location,
                                 city: e.target.value,
+                                barangay: "",
                               },
                             })
                           }
+                          disabled={!editJob.location.province}
                         >
                           <option value="">Select City/Municipality</option>
                           {cities.map((city) => (
@@ -463,7 +548,7 @@ const ManageJob = () => {
                         <label className="form-label">Barangay</label>
                         <select
                           className="form-control"
-                          value={editJob.location?.barangay || ""}
+                          value={editJob.location.barangay}
                           onChange={(e) =>
                             setEditJob({
                               ...editJob,
@@ -473,6 +558,7 @@ const ManageJob = () => {
                               },
                             })
                           }
+                          disabled={!editJob.location.city}
                         >
                           <option value="">Select Barangay</option>
                           {barangays.map((barangay) => (
@@ -482,17 +568,33 @@ const ManageJob = () => {
                           ))}
                         </select>
                       </div>
-
-                      <button type="submit" className="btn btn-primary">
-                        Save Changes
-                      </button>
+                      {/* Modal footer */}
+                      <div className="modal-footer flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="btn btn-secondary flex-grow-1 flex-md-grow-0"
+                          onClick={() => {
+                            setIsEditMode(false);
+                            setEditJob(null);
+                            setError("");
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="btn btn-primary flex-grow-1 flex-md-grow-0"
+                        >
+                          Save Changes
+                        </button>
+                      </div>
                     </form>
                   </div>
                 </div>
               </div>
             </div>
           )}
-        </div>
+        </main>
       </div>
     </>
   );

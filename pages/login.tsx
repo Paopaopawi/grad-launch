@@ -7,24 +7,29 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(true); // To manage loading state
-  const [isClient, setIsClient] = useState(false); // To check if we're on the client-side
+  const [isLoading, setIsLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    setIsClient(true); // Set client-side flag to true after component mounts
-
-    const isLoggedIn = localStorage.getItem("userLoggedIn");
-    const role = localStorage.getItem("role");
-
-    if (isLoggedIn === "true") {
-      if (role === "graduate") {
-        router.push("/dashboard");
-      } else if (role === "employer") {
-        router.push("/employer-dashboard");
-      }
+    if (typeof window !== "undefined") {
+      const handleResize = () => setIsMobile(window.innerWidth < 768);
+      handleResize();
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
     }
+  }, []);
 
-    setIsLoading(false); // Once we've checked the login status, set loading to false
+  useEffect(() => {
+    setIsClient(true);
+    const storedAuth = localStorage.getItem("auth");
+    const auth = storedAuth ? JSON.parse(storedAuth) : null;
+
+    if (auth?.isLoggedIn) {
+      if (auth.role === "graduate") router.push("/dashboard");
+      else if (auth.role === "employer") router.push("/employer-dashboard");
+    }
+    setIsLoading(false);
   }, [router]);
 
   const handleLogin = (e: React.FormEvent) => {
@@ -35,33 +40,30 @@ export default function LoginPage() {
     );
 
     if (user) {
-      // Store logged-in email, role, and login status in localStorage
       localStorage.setItem("userLoggedIn", "true");
       localStorage.setItem("role", user.role);
-      localStorage.setItem("loggedInEmail", user.email); // Store email
+      localStorage.setItem("loggedInEmail", user.email);
 
-      if (user.role === "graduate") {
-        router.push("/dashboard");
-      } else if (user.role === "employer") {
-        router.push("/employer-dashboard");
-      }
+      const auth = { email: user.email, role: user.role, isLoggedIn: true };
+      localStorage.setItem("auth", JSON.stringify(auth));
+
+      if (user.role === "graduate") router.push("/dashboard");
+      else if (user.role === "employer") router.push("/employer-dashboard");
     } else {
       alert("Invalid credentials");
     }
   };
 
-  if (isLoading || !isClient) {
-    return <div>Loading...</div>; // Show loading message while checking login state
-  }
+  if (isLoading || !isClient) return <div>Loading...</div>;
 
   return (
     <>
-      <Navbar />
-      <div className="d-flex justify-content-center align-items-center min-vh-100 bg-light">
+      <Navbar toggleSidebar={() => {}} />
+      <div className="d-flex justify-content-center align-items-center min-vh-100 bg-light px-3">
         <form
           onSubmit={handleLogin}
           className="bg-white p-4 rounded shadow w-100"
-          style={{ maxWidth: "400px" }}
+          style={{ maxWidth: "400px", minWidth: isMobile ? "auto" : "320px" }}
         >
           <h1 className="text-center text-primary mb-4">Login</h1>
 
@@ -73,6 +75,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              autoComplete="email"
             />
           </div>
 
@@ -84,6 +87,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              autoComplete="current-password"
             />
           </div>
 
@@ -91,10 +95,13 @@ export default function LoginPage() {
             Login
           </button>
 
-          <div className="mt-4 text-center">
+          <div className="mt-4 text-center small">
             <p>
               Don't have an account yet?{" "}
-              <a href="/sign-up" className="text-blue-500 hover:underline">
+              <a
+                href="/sign-up"
+                className="text-primary text-decoration-underline"
+              >
                 Sign up
               </a>
             </p>
