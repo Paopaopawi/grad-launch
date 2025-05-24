@@ -11,6 +11,8 @@
   "dependencies": {
     "bootstrap": "^5.3.5",
     "bootstrap-icons": "^1.11.3",
+    "lodash": "^4.17.21",
+    "lodash.debounce": "^4.0.8",
     "lucide-react": "^0.503.0",
     "next": "^15.3.1",
     "psgc": "^2.2.0",
@@ -25,6 +27,7 @@
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/bootstrap": "^5.2.10",
+    "@types/lodash": "^4.17.17",
     "@types/node": "^20",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",

@@ -6,3 +6,6 @@
 @tailwind forms;
 @tailwind aspect-ratio;
 @tailwind line-clamp;
+html {
+  scroll-behavior: smooth;
+}

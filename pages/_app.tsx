@@ -5,6 +5,7 @@ import "bootstrap-icons/font/bootstrap-icons.css";
 import { useEffect } from "react";
 import { useRouter } from "next/router";
 import { regions, provinces, municipalities, barangays } from "psgc";
+<link rel="icon" href="%PUBLIC_URL%/favicon.ico" />;
 
 function App({ Component, pageProps }: any) {
   const router = useRouter();

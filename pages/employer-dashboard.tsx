@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
-import Navbar from "../components/navbar";
-import Sidebar from "../components/sidebar";
+import Navbar from "../component/navbar";
+import Sidebar from "../component/sidebar";
+import Footer from "@/component/footer";
 
 const EmployerDashboard = () => {
   const [jobs, setJobs] = useState<any[]>([]);
@@ -243,6 +244,7 @@ const EmployerDashboard = () => {
           </div>
         </main>
       </div>
+      <Footer />
     </>
   );
 };

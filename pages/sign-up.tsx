@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Navbar from "../components/navbar";
+import Navbar from "../component/navbar";
 import Link from "next/link";
 
 export default function SignUp() {
@@ -44,6 +44,18 @@ export default function SignUp() {
     const auth = { email, role, isLoggedIn: true };
     localStorage.setItem("auth", JSON.stringify(auth));
 
+    const users = JSON.parse(localStorage.getItem("users") || "[]");
+    const user = users.find(
+      (u: any) => u.email === email && u.password === password
+    );
+    if (user) {
+      localStorage.setItem("userLoggedIn", "true");
+      localStorage.setItem("role", user.role);
+      localStorage.setItem("loggedInEmail", user.email);
+
+      const auth = { email: user.email, role: user.role, isLoggedIn: true };
+      localStorage.setItem("auth", JSON.stringify(auth));
+    }
     console.log(
       "Users saved:",
       JSON.parse(localStorage.getItem("users") || "[]")
